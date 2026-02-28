@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import zipfile
+import pyzipper
 import sys
 import time
 
@@ -28,30 +29,39 @@ def main():
     
     start_time = time.time()
     
-    for i in range(max_range + 1):
-        # We will try the plain number string
-        passwords_to_try = [str(i)]
-        
-        # If --padding is provided, we also check zero-padded strings
-        if args.padding:
-            padded = str(i).zfill(max_len)
-            if padded not in passwords_to_try:
-                passwords_to_try.append(padded)
-        
-        for pwd in passwords_to_try:
-            # Print current progress cleanly
-            if args.showall:
-                sys.stdout.write(f"TRYING PASSWORD: {pwd} ")
-            else:
-                sys.stdout.write(f"\rTrying password: {pwd:<{max_len}} ")
-            sys.stdout.flush()
+    with pyzipper.AESZipFile(zip_filepath, 'r') as zf:
+        # Get the first file that is not a directory
+        target_info = None
+        for zinfo in zf.infolist():
+            if not zinfo.is_dir():
+                target_info = zinfo
+                break
+                
+        if not target_info:
+            print("No valid files found to test decryption.")
+            sys.exit(1)
             
-            try:
-                with zipfile.ZipFile(zip_filepath, 'r') as zf:
+        for i in range(max_range + 1):
+            # We will try the plain number string
+            passwords_to_try = [str(i)]
+            
+            # If --padding is provided, we also check zero-padded strings
+            if args.padding:
+                padded = str(i).zfill(max_len)
+                if padded not in passwords_to_try:
+                    passwords_to_try.append(padded)
+            
+            for pwd in passwords_to_try:
+                # Print current progress cleanly
+                if args.showall:
+                    sys.stdout.write(f"TRYING PASSWORD: {pwd} ")
+                elif i % 100 == 0:
+                    sys.stdout.write(f"\rTrying password: {pwd:<{max_len}} ")
+                    sys.stdout.flush()
+                
+                try:
                     # Test password by reading the first file in memory instead of extracting to disk
-                    for zinfo in zf.infolist():
-                        zf.read(zinfo, pwd=pwd.encode('utf-8'))
-                        break # Successfully reading one encrypted file confirms the password
+                    zf.read(target_info, pwd=pwd.encode('utf-8'))
                     
                     elapsed_time = time.time() - start_time
                     if args.showall:
@@ -59,16 +69,16 @@ def main():
                     print(f"\n\n[SUCCESS] Password found: {pwd}")
                     print(f"Time taken: {elapsed_time:.2f} seconds")
                     sys.exit(0)
-            except RuntimeError as e:
-                # 'Bad password' or other extraction exceptions typically fall here
-                if args.showall:
-                    sys.stdout.write("- FAILED\n")
-                    sys.stdout.flush()
-            except Exception as e:
-                # Ignore other exceptions like CRC bad magic which can happen if pwd is wrong
-                if args.showall:
-                    sys.stdout.write("- FAILED\n")
-                    sys.stdout.flush()
+                except RuntimeError as e:
+                    # 'Bad password' or other extraction exceptions typically fall here
+                    if args.showall:
+                        sys.stdout.write("- FAILED\n")
+                        sys.stdout.flush()
+                except Exception as e:
+                    # Ignore other exceptions like CRC bad magic which can happen if pwd is wrong
+                    if args.showall:
+                        sys.stdout.write("- FAILED\n")
+                        sys.stdout.flush()
                 
     elapsed_time = time.time() - start_time
     print(f"\n\n[FAILURE] Password not found in the range 0 to {max_range}.")

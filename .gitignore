@@ -1,5 +1,6 @@
-# Ignore zip files, text files, and system files
+# Ignore zip files, test password, and virtual environments
 *.zip
-*.txt
+pwd.txt
+.venv/
 .DS_Store
 __pycache__/
