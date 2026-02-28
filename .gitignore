@@ -1,0 +1,5 @@
+# Ignore zip files, text files, and system files
+*.zip
+*.txt
+.DS_Store
+__pycache__/
